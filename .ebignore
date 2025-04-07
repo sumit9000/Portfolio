@@ -1,0 +1,25 @@
+# Source files not needed in production
+client/src/
+server/*.ts
+shared/*.ts
+!server/index.ts
+!shared/schema.ts
+
+# Development files
+.git/
+.github/
+.vscode/
+*.md
+!DEPLOYMENT.md
+cloudformation-template.json
+node_modules/
+deploy.zip
+
+# Build files
+*.log
+.env.local
+.env.development
+
+# Ignore unnecessary files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,459 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation template for Portfolio Website infrastructure",
+  "Parameters": {
+    "DBPassword": {
+      "NoEcho": "true",
+      "Description": "Password for the RDS PostgreSQL database",
+      "Type": "String",
+      "MinLength": "8",
+      "MaxLength": "41",
+      "AllowedPattern": "[a-zA-Z0-9]*",
+      "ConstraintDescription": "must contain only alphanumeric characters"
+    },
+    "DBUser": {
+      "Description": "Username for the RDS PostgreSQL database",
+      "Type": "String",
+      "Default": "postgres"
+    },
+    "DBName": {
+      "Description": "Name of the RDS PostgreSQL database",
+      "Type": "String",
+      "Default": "portfolio"
+    },
+    "EnvironmentName": {
+      "Description": "Name of the Elastic Beanstalk environment",
+      "Type": "String",
+      "Default": "portfolio-prod"
+    }
+  },
+  "Resources": {
+    "PortfolioVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Portfolio VPC"
+          }
+        ]
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PortfolioVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": "true",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public Subnet 1"
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PortfolioVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": "true",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public Subnet 2"
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PortfolioVPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Private Subnet 1"
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PortfolioVPC"
+        },
+        "CidrBlock": "10.0.4.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Private Subnet 2"
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Portfolio IGW"
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PortfolioVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PortfolioVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public Route Table"
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Allow database access from web servers",
+        "VpcId": {
+          "Ref": "PortfolioVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "5432",
+            "ToPort": "5432",
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Database Security Group"
+          }
+        ]
+      }
+    },
+    "WebServerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Allow web traffic to web servers",
+        "VpcId": {
+          "Ref": "PortfolioVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "80",
+            "ToPort": "80",
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "443",
+            "ToPort": "443",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Web Server Security Group"
+          }
+        ]
+      }
+    },
+    "DatabaseSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for RDS database",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Database Subnet Group"
+          }
+        ]
+      }
+    },
+    "DatabaseInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBName": {
+          "Ref": "DBName"
+        },
+        "Engine": "postgres",
+        "MultiAZ": false,
+        "MasterUsername": {
+          "Ref": "DBUser"
+        },
+        "MasterUserPassword": {
+          "Ref": "DBPassword"
+        },
+        "DBInstanceClass": "db.t3.micro",
+        "AllocatedStorage": "20",
+        "DBSubnetGroupName": {
+          "Ref": "DatabaseSubnetGroup"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Portfolio Database"
+          }
+        ]
+      }
+    },
+    "PortfolioApplication": {
+      "Type": "AWS::ElasticBeanstalk::Application",
+      "Properties": {
+        "ApplicationName": "portfolio-website",
+        "Description": "Portfolio Website Application"
+      }
+    },
+    "PortfolioApplicationVersion": {
+      "Type": "AWS::ElasticBeanstalk::ApplicationVersion",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "PortfolioApplication"
+        },
+        "Description": "Initial version",
+        "SourceBundle": {
+          "S3Bucket": { "Fn::Join": [ "-", [ "elasticbeanstalk-samples", { "Ref": "AWS::Region" } ] ] },
+          "S3Key": "nodejs-sample.zip"
+        }
+      }
+    },
+    "PortfolioConfigurationTemplate": {
+      "Type": "AWS::ElasticBeanstalk::ConfigurationTemplate",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "PortfolioApplication"
+        },
+        "Description": "Portfolio configuration template",
+        "SolutionStackName": "64bit Amazon Linux 2 v5.8.0 running Node.js 18",
+        "OptionSettings": [
+          {
+            "Namespace": "aws:autoscaling:launchconfiguration",
+            "OptionName": "IamInstanceProfile",
+            "Value": "aws-elasticbeanstalk-ec2-role"
+          },
+          {
+            "Namespace": "aws:ec2:vpc",
+            "OptionName": "VPCId",
+            "Value": {
+              "Ref": "PortfolioVPC"
+            }
+          },
+          {
+            "Namespace": "aws:ec2:vpc",
+            "OptionName": "Subnets",
+            "Value": {
+              "Fn::Join": [
+                ",",
+                [
+                  {
+                    "Ref": "PublicSubnet1"
+                  },
+                  {
+                    "Ref": "PublicSubnet2"
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "Namespace": "aws:elasticbeanstalk:application:environment",
+            "OptionName": "DATABASE_URL",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  "postgresql://",
+                  {
+                    "Ref": "DBUser"
+                  },
+                  ":",
+                  {
+                    "Ref": "DBPassword"
+                  },
+                  "@",
+                  {
+                    "Fn::GetAtt": [
+                      "DatabaseInstance",
+                      "Endpoint.Address"
+                    ]
+                  },
+                  ":",
+                  {
+                    "Fn::GetAtt": [
+                      "DatabaseInstance",
+                      "Endpoint.Port"
+                    ]
+                  },
+                  "/",
+                  {
+                    "Ref": "DBName"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PortfolioEnvironment": {
+      "Type": "AWS::ElasticBeanstalk::Environment",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "PortfolioApplication"
+        },
+        "Description": "Portfolio Website Environment",
+        "EnvironmentName": {
+          "Ref": "EnvironmentName"
+        },
+        "TemplateName": {
+          "Ref": "PortfolioConfigurationTemplate"
+        },
+        "VersionLabel": {
+          "Ref": "PortfolioApplicationVersion"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "DatabaseEndpoint": {
+      "Description": "RDS PostgreSQL Endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseInstance",
+          "Endpoint.Address"
+        ]
+      }
+    },
+    "WebsiteURL": {
+      "Description": "URL of the portfolio website",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt": [
+                "PortfolioEnvironment",
+                "EndpointURL"
+              ]
+            }
+          ]
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  app:
+    image: node:18-alpine
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/portfolio
+    volumes:
+      - ./:/app
+    working_dir: /app
+    command: sh -c "npm ci && npm run build && npm start"
+    restart: always
+    depends_on:
+      - db
+    
+  db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=portfolio
+    volumes:
+      - portfolio_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+      
+  # Add a simple test app that you can run right away
+  whoami:
+    image: jwilder/whoami
+    ports:
+      - "8000:8000"
+
+volumes:
+  portfolio_data:
